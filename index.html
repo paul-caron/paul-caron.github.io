@@ -110,6 +110,7 @@
         let level;
         let protagonist;
         let background;
+        let foreground;
         let bullets;
         let audios = ["#fmtechno", "#hardgroove", "#dorienigm"];
         let audioIndex = 2;
@@ -174,8 +175,8 @@
             return { colliders: [], enemies: [], drawables: [], movers: [], transitionProgress: 0.0 }
         }
 
-        //const assetsRoot = "assets/";
-        const assetsRoot = "https://cdn.jsdelivr.net/gh/paul-caron/webglstuff/assets/";
+        const assetsRoot = "assets/";
+        //const assetsRoot = "https://cdn.jsdelivr.net/gh/paul-caron/webglstuff/assets/";
 
         const textureURLs = [
             assetsRoot + 'sierpinski.png',
@@ -218,6 +219,7 @@
             assetsRoot + 'switch.png',
             assetsRoot + 'switch2.png',
             assetsRoot + 'switch3.png',
+            assetsRoot + 'fogofwar.png',
         ];
 
         // vertices for the background x,y,z,u,v
@@ -291,6 +293,14 @@
             }
             draw(dt) { // delta time from previous render
                 gl.useProgram(program);
+                
+                ////////////
+                gl.bindBuffer(gl.ARRAY_BUFFER, program.positionBuffer);
+                gl.vertexAttribPointer(program.positionLocation, 3, gl.FLOAT, false, 5 * 4, 0);
+                gl.enableVertexAttribArray(program.positionLocation);
+                gl.vertexAttribPointer(program.texCoordLocation, 2, gl.FLOAT, false, 5 * 4, 3 * 4);
+                gl.enableVertexAttribArray(program.texCoordLocation);
+                //////////
                 gl.uniform2f(program.textureOffsetLocation, ...this.textureOffset);
                 gl.uniform3f(program.positionOffsetLocation,
                     this.x + this.positionOffset[0],
@@ -684,7 +694,7 @@
                 super(boss_sz, [34,35,36], bossVertices, x, y, z);
                 this.collisionAction = () => {
                     die();
-                    dialog("YOU WERE CAUGHT BY GRUMP");
+                    dialog("YOU WERE CAUGHT BY THE EVIL EYE");
                 };
                 this.animations.walking = {
                     "timePerFrame": 200,
@@ -956,6 +966,7 @@
             Object.assign(this, initLevel());
             protagonist = new Protagonist();
             background = new Drawable([0], backgroundVertices);
+            foreground = new Drawable([40], backgroundVertices);
 
             dialog("USE ARROW KEYS TO MOVE AROUND",
                 () => { dialog("SPACE BAR FOR ATTACK") });
@@ -2055,6 +2066,11 @@
                           bubble.dy = Math.sin(angle + Math.PI/360) * 0.0003 * dt;
                           angle += Math.PI/360;
                       };
+                      
+                      bubble.collisionAction = ()=>{
+                      	die();
+                          dialog("YOU WERE CAUGHT BY THE EVIL EYE");
+                      };
                       level.drawables.push(bubble);
                       level.colliders.push(bubble);
                       level.movers.push(bubble);
@@ -2381,9 +2397,10 @@
                 function render(time) {
                     // Delta Time since last rendering
                     let dt = time - previousTime;
+                    if (!(dt < 10))
                     previousTime = time;
 
-                    if(!dt || dt > 50 || protagonist.dead){
+                    if(!dt || dt > 32 || dt < 10 || protagonist.dead){
                         //requestAnimationFrame(render);
 //                        return;
                     }
@@ -2431,9 +2448,18 @@
                         bullets.forEach((b) => {
                             if (e.isColliding(b.x, b.y, sz)) {
                                 if (e.dead) return;
-                                let blood = new BloodParticle(e.x, e.y);
+                               // let blood = new BloodParticle((e.x+b.x)/2, (e.y+b.y)/2);
+                                let x = (Math.max(e.x - e.halfWidth, b.x-b.halfWidth)+Math.min(e.x+e.halfWidth, b.x+b.halfWidth))/2;
+                                let y = (Math.max(e.y - e.halfWidth, b.y-b.halfWidth)+Math.min(e.y+e.halfWidth, b.y+b.halfWidth))/2;
+                                let blood = new BloodParticle(x, y);
+                               // let blood = new BloodParticle((e.x*e.halfWidth+b.x*b.halfWidth)/(2*(e.halfWidth+b.halfWidth), (e.y*e.halfWidth+b.y*b.halfWidth)/(2*(e.halfWidth*b.halfWidth))));
                                 level.drawables.push(blood);
                                 level.movers.push(blood);
+                                blood.updateDxy = (dt) => {
+                                    let angle = Math.atan2(blood.dy, blood.dx);
+                                    blood.dx = Math.cos(angle+Math.PI/90)/800 ;
+                                    blood.dy = Math.sin(angle+Math.PI/90)/800 ;
+                                };
                                 b.damage(e);
                                 if (e.dead) e.dying();
                             }
@@ -2488,6 +2514,10 @@
                             protagonist.attack(protagonist.dx, protagonist.dy);
                         }
                     }//end if control enabled
+                    
+                    
+                    
+                    foreground.draw(dt);
 }
                     // LOOP
                     if (!protagonist.dead)
