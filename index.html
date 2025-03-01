@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pedro Escobar</title>
+    <title>Pedro Escobar 2025</title>
     <style>
         body {
             user-select: none;
@@ -103,11 +103,9 @@
         preload="auto" loop>
     </audio>
     <button id="music" onClick="audio.paused?audio.play():audio.pause();">🎵</button>
-    <button id="zoomIn" onClick="zoomFactor-=0.25;">&plus;</button>
-    <button id="zoomOut" onClick="zoomFactor+=0.25;">&minus;</button>
+    <button id="zoomIn" onClick="if(zoomFactor>0)zoomFactor-=0.25;">&plus;</button>
+    <button id="zoomOut" onClick="if(zoomFactor<2)zoomFactor+=0.25;">&minus;</button>
     <canvas id="webglCanvas"></canvas>
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
     <script>
         // Globals
         let level;
@@ -121,7 +119,7 @@
         let gl;
         let program;
         let textures;
-        let zoomFactor = 1.0;
+        let zoomFactor = 1.25;
         // Variables for world offset and control keys
         let worldOffsetX = 0;
         let worldOffsetY = 0;
@@ -179,7 +177,6 @@
         }
 
         const assetsRoot = "assets/";
-        //const assetsRoot = "https://cdn.jsdelivr.net/gh/paul-caron/webglstuff/assets/";
 
         const textureURLs = [
             assetsRoot + 'sierpinski.png',
@@ -223,6 +220,7 @@
             assetsRoot + 'switch2.png',
             assetsRoot + 'switch3.png',
             assetsRoot + 'fogofwar.png',
+            assetsRoot + 'credits.png',
         ];
 
         // vertices for the background x,y,z,u,v
@@ -862,6 +860,15 @@
                 }
             }
         };
+
+
+        function LevelCredits() {
+            Object.assign(this, initLevel());
+            audio.pause();
+            audio = document.querySelector("#fmtechno");
+            audio.play();
+            background = new Drawable([41], backgroundVertices);
+        }
 
         function Level13() {
             Object.assign(this, initLevel());
@@ -2176,7 +2183,21 @@
             Object.assign(this, initLevel());
             audio.pause();
             audio = document.querySelector("#mom");
+            let t = audio.currentTime;
+            audio.currentTime = t + 6;
             audio.play();
+
+            let portal = new Portal(0.0, -0.6, 0.0);
+            portal.collisionAction = () => {
+                protagonist.animation = "blink";
+                controlsEnabled = false;
+                dialog("YOU FOUND THE EXIT",
+                    () => {
+                        protagonist.animation = "idle";
+                        level = new LevelCredits();
+                    });
+                portal.collisionAction = () => { };
+            };
 
             let selena = new Selena(0,-0.2,0,`Thanks my love for rescuing me, Pedro. I want some latynx babies with you.(THE END)`);
             let oldCollisionAction = selena.collisionAction.bind(selena);
@@ -2205,8 +2226,8 @@
                baby.vertices = getVertices(sz/3);
                this.drawables.push(baby);
             };
-            this.drawables = [selena];
-            this.colliders = [selena];
+            this.drawables = [selena, portal];
+            this.colliders = [selena, portal];
         }
 
         try {
