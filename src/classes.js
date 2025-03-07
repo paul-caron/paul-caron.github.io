@@ -58,6 +58,62 @@ class Drawable {
     }
 };
 
+class Char extends Drawable{
+    static charMap = {
+        a:{row:7,col:0},
+        b:{row:7,col:1},
+        c:{row:7,col:2},
+        d:{row:7,col:3},
+        e:{row:7,col:4},
+        f:{row:7,col:5},
+        g:{row:7,col:6},
+        h:{row:7,col:7},
+        i:{row:7,col:8},
+        j:{row:7,col:9},
+        k:{row:7,col:10},
+        l:{row:7,col:11},
+        m:{row:7,col:12},
+        n:{row:6,col:0},
+        o:{row:6,col:1},
+        p:{row:6,col:2},
+        q:{row:6,col:3},
+        r:{row:6,col:4},
+        s:{row:6,col:5},
+        t:{row:6,col:6},
+        u:{row:6,col:7},
+        v:{row:6,col:8},
+        w:{row:6,col:9},
+        x:{row:6,col:10},
+        y:{row:6,col:11},
+        z:{row:6,col:12},
+        0:{row:5,col:0},
+        1:{row:5,col:1},
+        2:{row:5,col:2},
+        3:{row:5,col:3},
+        4:{row:5,col:4},
+        5:{row:5,col:5},
+        6:{row:5,col:6},
+        7:{row:5,col:7},
+        8:{row:5,col:8},
+        9:{row:5,col:9},
+        '.':{row:5,col:10},
+        ',':{row:5,col:11},
+        '!':{row:5,col:12},
+    };
+    constructor(char, x, y, z){
+        let {row,col} = Char.charMap[char];
+        let vertices = new Float32Array([
+            -sz/2, sz, 0.0, (0.0+col)/16,(1.0+row)/8,
+            -sz/2, -sz, 0.0,(0.0+col)/16,(0.0+row)/8,
+            sz/2, sz, 0.0, (1.0+col)/16, (1.0+row)/8,
+            -sz/2, -sz, 0.0,(0.0+col)/16,(0.0+row)/8,
+            sz/2, sz, 0.0, (1.0+col)/16, (1.0+row)/8,
+            sz/2, -sz, 0.0, (1.0+col)/16,(0.0+row)/8,
+        ]);
+        super([43],vertices,x,y,z);
+    }
+};
+
 class Line {
     constructor(vertices) {
         this.vertices = vertices;  //x,y,z,r,g,b,a
@@ -336,7 +392,7 @@ class Leaf extends Drawable {
         this.collisionAction = () => {
             if (!collectables['leaf']) collectables['leaf'] = 1;
             else collectables['leaf'] += 1;
-            dialog(`YOU FOUND A LEAF [${collectables['leaf']}]`);
+            dialog(`YOU FOUND A LEAF [${collectables['leaf']}]`,null,'assets/leaf.png');
             this.lifetime = 0;
             this.collisionAction = () => { };
         };
@@ -398,7 +454,7 @@ class DEA extends Enemy {
         super(sz, [18, 19], tileVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY THE D.E.A.");
+            dialog("YOU WERE CAUGHT BY THE D.E.A.",null,'assets/dea.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -416,7 +472,7 @@ class DEA_Boss extends Enemy {
         super(boss_sz, [18, 19], bossVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY THE D.E.A.");
+            dialog("YOU WERE CAUGHT BY THE D.E.A.",null,'assets/dea.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -434,7 +490,7 @@ class Grump_Boss extends Enemy {
         super(boss_sz, [30,31], bossVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY GRUMP");
+            dialog("YOU WERE CAUGHT BY GRUMP",null,'assets/grump.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -452,7 +508,7 @@ class Eye_Boss extends Enemy {
         super(boss_sz, [34,35,36], bossVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY THE EVIL EYE");
+            dialog("YOU WERE CAUGHT BY THE EVIL EYE",null,'assets/eye.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -470,7 +526,7 @@ class ICE extends Enemy {
         super(sz, [25, 26], tileVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY I.C.E.");
+            dialog("YOU WERE CAUGHT BY I.C.E.",null,'assets/ice.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -488,7 +544,7 @@ class ICE_Boss extends Enemy {
         super(boss_sz, [25, 26], bossVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY I.C.E.");
+            dialog("YOU WERE CAUGHT BY I.C.E.",null,'assets/ice.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -506,7 +562,7 @@ class DOGE extends Enemy {
         super(sz, [28, 29], tileVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY D.O.G.E.");
+            dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'doge.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -525,7 +581,7 @@ class DOGE_Boss extends Enemy {
         super(boss_sz, [28, 29], bossVertices, x, y, z);
         this.collisionAction = () => {
             die();
-            dialog("YOU WERE CAUGHT BY D.O.G.E.");
+            dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -566,10 +622,21 @@ class Protagonist extends Drawable {
         this.dx = 0;
         this.dy = 0;
         let bullets = [];
+        this.chargedTime = 0;
     }
-    attack(dx, dy) {
+    attack() {
+        this.isCharging = false;
+
         if (!this.weapon) return;
         if (!this.ammoType) return;
+
+        let dx = this.dx;
+        let dy = this.dy;
+
+        if(this.chargedTime >= 3000){
+            this.attack2(); return;
+        }
+
         let shoot = (offX,offY) => {
           let bullet = new Bullet(sz, [13, 14, 15, 16], tileVertices, 0.0, 0.0, 0.0);
           bullet.dx = dx;
@@ -602,7 +669,12 @@ class Protagonist extends Drawable {
           level.drawables.push(line);
           level.movers.push(line);
         }
-        if(this.weapon==="gun") shoot(0,0);
+        if(this.weapon==="gun"){
+          let angle = Math.atan2(dy,dx);
+          let x = Math.cos(angle) * sz;
+          let y = Math.sin(angle) * sz;
+          shoot(x,y);
+        }
         if(this.weapon==="double"){
           let angle = Math.atan2(dy,dx);
           let x1 = Math.cos(angle + Math.PI/2) * sz;
@@ -612,6 +684,26 @@ class Protagonist extends Drawable {
           let y2 = Math.sin(angle - Math.PI/2) * sz;
           shoot(x2,y2);
         }
+        this.chargedTime = 0;
+    }
+    attack2(){
+        const n = 6;
+        for(let i=0;i<n;++i){
+        let angle = i * Math.PI * 2 / n;
+        let bullet = new Bullet(sz, [42], tileVertices, 0.0, 0.0, 0.0);
+        bullet.dx = Math.cos(angle) * 0.003;
+        bullet.dy = Math.sin(angle) * 0.003;
+        bullet.x = -worldOffsetX ;
+        bullet.y = -worldOffsetY;
+        bullet.lifetime = 2000;
+        bullet.power = this.strength * 2;
+        bullet.collisionAction = () => { };
+        bullets.push(bullet);
+        }
+        this.chargedTime = 0;
+    }
+    charge(dt){
+        this.chargedTime += dt;
     }
     getPosition() {
         return { x: -worldOffsetX, y: -worldOffsetY };
@@ -623,7 +715,7 @@ class NPC extends Fixture {
         super(sz, [22, 23], tileVertices, x, y, z);
         this.text = text;
         this.collisionAction = function () {
-            dialog(this.text);
+            dialogBlocking(this.text,null,'assets/npc.png');
         }
     }
 };
@@ -633,7 +725,7 @@ class Selena extends Fixture {
         super(sz, [32, 33], tileVertices, x, y, z);
         this.text = text;
         this.collisionAction = function () {
-            dialog(this.text);
+            dialog(this.text,null,'assets/selena.png');
         }
     }
 };
