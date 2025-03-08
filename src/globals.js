@@ -1,4 +1,5 @@
 // Globals
+let dialogTimeoutId;
 let canvas;
 let level;
 let protagonist;
@@ -9,6 +10,7 @@ let audios = ["#fmtechno", "#hardgroove", "#dorienigm", "#mom"];
 let audioIndex = 2;
 let audio = document.querySelector(audios[audioIndex]);
 let gl;
+let textureImages = [];
 let program;  //textures
 let program2; //lines
 let textures;
@@ -70,6 +72,8 @@ const textureURLs = [
     assetsRoot + 'switch3.png',
     assetsRoot + 'fogofwar.png',
     assetsRoot + 'credits.png',
+    assetsRoot + 'bubblered.png',
+    assetsRoot + 'font.png',
 ];
 
 // vertices for the background x,y,z,u,v
@@ -116,11 +120,45 @@ const getVertices = (size, offsetU = 0, offsetV = 0, div = 1) => {
 };
 
 
-function dialog(text, callback = () => { }) {
+function dialog(text, callback = () => { }, avatarSrc = "assets/pedro.png") {
+    clearTimeout(dialogTimeoutId);
+    if(!callback) callback =()=>{};
     const dialogBox = document.getElementById('dialogBox');
-    dialogBox.innerText = text;
-    setTimeout(() => {
-        dialogBox.innerText = "";
+    const dialogText = document.getElementById('dialogText');
+    const avatar = document.getElementById('dialogAvatar');
+    dialogBox.style.display = 'block';
+    avatar.style.borderImage= `url(assets/border2.png) 8 / 32`;
+    dialogBox.style.backgroundImage= 'url(assets/fogofwar.png)';
+    dialogBox.style.borderImage= `url(assets/border.png) 14 / 32`;
+    avatar.src = avatarSrc;
+    dialogText.innerText = text;
+    dialogTimeoutId = setTimeout(() => {
+        dialogText.innerText = "";
+        avatar.src = "";
+        dialogBox.style.display = 'none';
+        callback();
+    },
+    2000);
+}
+
+function dialogBlocking(text, callback = () => { }, avatarSrc = "assets/pedro.png") {
+    clearTimeout(dialogTimeoutId);
+    if(!callback) callback =()=>{};
+    const dialogBox = document.getElementById('dialogBox');
+    const dialogText = document.getElementById('dialogText');
+    const avatar = document.getElementById('dialogAvatar');
+    controlsEnabled = false;
+    avatar.style.borderImage= `url(assets/border2.png) 8 / 32`;
+    dialogBox.style.backgroundImage= 'url(assets/fogofwar.png)';
+    dialogBox.style.borderImage= `url(assets/border.png) 14 / 32`;
+    dialogBox.style.display = 'block';
+    avatar.src = avatarSrc;
+    dialogText.innerText = text;
+    dialogTimeoutId = setTimeout(() => {
+        dialogText.innerText = "";
+        avatar.src = "";
+        dialogBox.style.display = 'none';
+        controlsEnabled = true;
         callback();
     },
     3000);
