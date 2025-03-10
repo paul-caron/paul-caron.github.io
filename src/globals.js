@@ -1,10 +1,12 @@
 // Globals
+let frameBuffer;
+let frameBufferTexture;
 let dialogTimeoutId;
 let canvas;
 let level;
 let protagonist;
 let background;
-let foreground;
+let framebuffer;
 let bullets;
 let audios = ["#fmtechno", "#hardgroove", "#dorienigm", "#mom"];
 let audioIndex = 2;
@@ -13,6 +15,7 @@ let gl;
 let textureImages = [];
 let program;  //textures
 let program2; //lines
+let program3; //framebuffer
 let textures;
 let zoomFactor = 1.25;
 let worldOffsetX = 0;
@@ -127,9 +130,6 @@ function dialog(text, callback = () => { }, avatarSrc = "assets/pedro.png") {
     const dialogText = document.getElementById('dialogText');
     const avatar = document.getElementById('dialogAvatar');
     dialogBox.style.display = 'block';
-    avatar.style.borderImage= `url(assets/border2.png) 8 / 32`;
-    dialogBox.style.backgroundImage= 'url(assets/fogofwar.png)';
-    dialogBox.style.borderImage= `url(assets/border.png) 14 / 32`;
     avatar.src = avatarSrc;
     dialogText.innerText = text;
     dialogTimeoutId = setTimeout(() => {
@@ -146,11 +146,11 @@ function dialogBlocking(text, callback = () => { }, avatarSrc = "assets/pedro.pn
     if(!callback) callback =()=>{};
     const dialogBox = document.getElementById('dialogBox');
     const dialogText = document.getElementById('dialogText');
-    const avatar = document.getElementById('dialogAvatar');
+    let avatar = document.getElementById('dialogAvatar');
+//    avatar = textureImages[textureURLs.indexOf(avatarSrc)];
+//    avatar.id = 'dialogAvatar';
+    avatar.src = avatarSrc;
     controlsEnabled = false;
-    avatar.style.borderImage= `url(assets/border2.png) 8 / 32`;
-    dialogBox.style.backgroundImage= 'url(assets/fogofwar.png)';
-    dialogBox.style.borderImage= `url(assets/border.png) 14 / 32`;
     dialogBox.style.display = 'block';
     avatar.src = avatarSrc;
     dialogText.innerText = text;

@@ -57,6 +57,14 @@ async function initWebGL(){
         const fsfetch2 = await fetch("src/lineFragmentShader");
         const fragmentShaderSource2 = await fsfetch2.text();
 
+        // Vertex shader program
+        const vsfetch3 = await fetch("src/framebufferVertexShader");
+        const vertexShaderSource3 = await vsfetch3.text();
+
+        // Fragment shader program
+        const fsfetch3 = await fetch("src/framebufferFragmentShader");
+        const fragmentShaderSource3 = await fsfetch3.text();
+
         // Shader compilation and linking utility functions
         function compileShader(source, type) {
             const shader = gl.createShader(type);
@@ -88,6 +96,10 @@ async function initWebGL(){
         const fragmentShader2 = compileShader(fragmentShaderSource2, gl.FRAGMENT_SHADER);
         program2 = createProgram(vertexShader2, fragmentShader2);
 
+        const vertexShader3 = compileShader(vertexShaderSource3, gl.VERTEX_SHADER);
+        const fragmentShader3 = compileShader(fragmentShaderSource3, gl.FRAGMENT_SHADER);
+        program3 = createProgram(vertexShader3, fragmentShader3);
+
         // Get locations of the attributes and uniforms
         program.positionLocation = gl.getAttribLocation(program, "a_position");
         program.texCoordLocation = gl.getAttribLocation(program, "a_texCoord");
@@ -102,6 +114,12 @@ async function initWebGL(){
         program2.colorLocation = gl.getAttribLocation(program2, "a_color");
         program2.aspectRatioLocation = gl.getUniformLocation(program2, "u_aspectRatio");
         program2.zoomFactorLocation = gl.getUniformLocation(program2, "u_zoomFactor");
+
+        program3.positionLocation = gl.getAttribLocation(program3, "a_position");
+        program3.texCoordLocation = gl.getAttribLocation(program3, "a_texCoord");
+        program3.textureLocation = gl.getUniformLocation(program3, "u_texture");
+        program3.timeLocation = gl.getUniformLocation(program3, "u_time");
+        program3.optionLocation = gl.getUniformLocation(program3, "u_option");
 
         // Create buffer and load data
         program.positionBuffer = gl.createBuffer();
@@ -118,6 +136,13 @@ async function initWebGL(){
         gl.vertexAttribPointer(program2.colorLocation, 4, gl.FLOAT, false, 7 * 4, 3 * 4);
         gl.enableVertexAttribArray(program2.colorLocation);
 
+        program3.positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, program3.positionBuffer);
+        gl.vertexAttribPointer(program3.positionLocation, 3, gl.FLOAT, false, 5 * 4, 0);
+        gl.enableVertexAttribArray(program3.positionLocation);
+        gl.vertexAttribPointer(program3.texCoordLocation, 2, gl.FLOAT, false, 5 * 4, 3 * 4);
+        gl.enableVertexAttribArray(program3.texCoordLocation);
+
         // Create the textures
         textures = textureImages.map((img) => {
             let texture = gl.createTexture();
@@ -131,15 +156,23 @@ async function initWebGL(){
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
             return texture;
         });
+
+
+
     };
 
+
+
+
+
+
     // WebGL Rendering Settings
-    gl.enable(gl.DEPTH_TEST);
+//    gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.SCISSOR_TEST);
-    gl.depthFunc(gl.GEQUAL);
+//    gl.depthFunc(gl.GEQUAL);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.clearDepth(0.0);
+//    gl.clearDepth(0.0);
 
 }

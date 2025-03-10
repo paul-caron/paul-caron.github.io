@@ -10,11 +10,13 @@ function initEvents(){
 
     window.addEventListener('keydown', (event) => {
         event.preventDefault();
-//        if(protagonist.isCharging) return; //dont move when charging
         keys[event.key] = true;
         if (event.key === " "){
           protagonist.isCharging = true;
-  //        keys = {}; //dump all key presses, dont move when charging
+        }
+        if (Number.parseInt(event.key)){
+          console.log(event.key);
+          framebuffer.option = Number(event.key);
         }
     });
 
@@ -24,6 +26,7 @@ function initEvents(){
         height = window.innerHeight;
         canvas.width = width;
         canvas.height = height;
+        framebuffer.resize();
     });
 
     canvas.addEventListener('touchstart', (event) => { event.preventDefault(); document.querySelector("#buttons").style.visibility = "visible"; });

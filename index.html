@@ -34,15 +34,19 @@
     <script src="src/webgl.js"></script>
 <script>
 
-async function start(){ try {
-        await initWebGL();
+async function start(){
+    try {
+
+        //INIT
+        await initWebGL(); //init canvas, webgl context, textures, programs, attributes and uniform locations
         initEvents();
         level = new Level1();
-
-        // TIME
-        let previousTime = 0;
+        protagonist = new Protagonist();
+        background = new Drawable([0], backgroundVertices);
+        framebuffer = new Framebuffer();
 
         // THE LOOP
+        let previousTime = 0; //time of the last rendering
         function render(time) {
             // Delta Time since last rendering
             let dt = time - previousTime;
@@ -51,34 +55,38 @@ async function start(){ try {
 
             if(!dt || dt > 32 || dt < 10 || protagonist.dead){}
             else{
-                    // RESET SCREEN
-                    gl.viewport(0, 0, canvas.width, canvas.height);
-                    if (level.transitionProgress < 1.0) level.transitionProgress += 0.01;
-                    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                    gl.scissor((canvas.width * (1 - level.transitionProgress)) / 2, (canvas.height * (1 - level.transitionProgress)) / 2, canvas.width * level.transitionProgress, canvas.height * level.transitionProgress);
 
-                    // BACKGROUND DRAW
-                    background.textureOffset = [worldOffsetX / 3, worldOffsetY / 3];
-                    background.draw(dt);
+                framebuffer.bind();
 
-                    // PROTAGONIST DRAW
-                    // Choosing the texture for the protagonist depending on action
-                    let protagonistWalking = false;
-                    if (keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"])
-                        protagonistWalking = true;
-                    if (protagonist.animation !== "blink") {
-                        protagonist.animation = keys[" "] ? "attack" : protagonistWalking ? "walking" : "idle";
-                    }
-                    protagonist.draw(dt);
+                // RESET SCREEN
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                if (level.transitionProgress < 1.0)
+                    level.transitionProgress += 0.01;
+                //gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);//disabled depth testing for now
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.scissor((canvas.width * (1 - level.transitionProgress)) / 2, (canvas.height * (1 - level.transitionProgress)) / 2, canvas.width * level.transitionProgress, canvas.height * level.transitionProgress);
 
-                    // TILES DRAW
-                    level.drawables.forEach((d) => {
-                        d.positionOffset = [worldOffsetX, worldOffsetY, 0.0];
-                        d.draw(dt);
-                    });
+                // BACKGROUND DRAW
+                background.textureOffset = [worldOffsetX / 3, worldOffsetY / 3];
+                background.draw(dt);
 
-                    if (controlsEnabled) {
+                // PROTAGONIST DRAW
+                // Choosing the texture for the protagonist depending on action
+                let protagonistWalking = false;
+                if (keys["ArrowUp"] || keys["ArrowDown"] || keys["ArrowLeft"] || keys["ArrowRight"])
+                    protagonistWalking = true;
+                if (protagonist.animation !== "blink") {
+                    protagonist.animation = keys[" "] ? "attack" : protagonistWalking ? "walking" : "idle";
+                }
+                protagonist.draw(dt);
 
+                // TILES DRAW
+                level.drawables.forEach((d) => {
+                    d.positionOffset = [worldOffsetX, worldOffsetY, 0.0];
+                    d.draw(dt);
+                });
+
+                if (controlsEnabled) {
                     // DRAW PROTAGONIST BULLETS
                     bullets.forEach((b) => {
                         b.positionOffset = [worldOffsetX, worldOffsetY, 0.0];
@@ -96,6 +104,7 @@ async function start(){ try {
                                 let x = (Math.max(e.x - e.halfWidth, b.x-b.halfWidth)+Math.min(e.x+e.halfWidth, b.x+b.halfWidth))/2;
                                 let y = (Math.max(e.y - e.halfWidth, b.y-b.halfWidth)+Math.min(e.y+e.halfWidth, b.y+b.halfWidth))/2;
                                 let blood = new BloodParticle(x, y);
+                                blood.lifetime = 500;
                                 level.drawables.push(blood);
                                 level.movers.push(blood);
                                 blood.updateDxy = (dt) => {
@@ -125,55 +134,58 @@ async function start(){ try {
                     level.enemies = level.enemies.filter(m => { return m.lifetime === undefined || !(m.expired); });
 
                     // CONTROLS
-                        const d = 0.0003 * protagonist.speed * dt; //delta or offset change
+                    const d = 0.0003 * protagonist.speed * dt; //delta or offset change
 
-                        let oldOffsetX = new Number(worldOffsetX);
-                        let oldOffsetY = new Number(worldOffsetY);
+                    let oldOffsetX = new Number(worldOffsetX);
+                    let oldOffsetY = new Number(worldOffsetY);
 
-                        if (keys["ArrowLeft"]) { worldOffsetX += d; }
-                        if (keys["ArrowRight"]) { worldOffsetX -= d; }
-                        if (keys["ArrowUp"]) { worldOffsetY += d; }
-                        if (keys["ArrowDown"]) { worldOffsetY -= d; }
+                    if (keys["ArrowLeft"]) { worldOffsetX += d; }
+                    if (keys["ArrowRight"]) { worldOffsetX -= d; }
+                    if (keys["ArrowUp"]) { worldOffsetY += d; }
+                    if (keys["ArrowDown"]) { worldOffsetY -= d; }
 
-                        // SAVE THE DIRECTION THAT PROTAGONIST IS HEADING TO (FOR SPAWNING BULLET DIRECTION LATER)
-                        if (protagonistWalking) {
-                            protagonist.dx = -worldOffsetX + oldOffsetX;
-                            protagonist.dy = -worldOffsetY + oldOffsetY;
-                        }
+                    // SAVE THE DIRECTION THAT PROTAGONIST IS HEADING TO (FOR SPAWNING BULLET DIRECTION LATER)
+                    if (protagonistWalking) {
+                        protagonist.dx = -worldOffsetX + oldOffsetX;
+                        protagonist.dy = -worldOffsetY + oldOffsetY;
+                    }
 
 
-                        // REVERSE PROTAGONIST MOVEMENTS IF HITS AN OBJECT
-                        let collided = level.colliders.filter(c=>c.isColliding(-worldOffsetX,-worldOffsetY,sz));
-                        collided.sort((a,b)=>{
+                    // REVERSE PROTAGONIST MOVEMENTS IF HITS AN OBJECT
+                    let collided = level.colliders.filter(c=>c.isColliding(-worldOffsetX,-worldOffsetY,sz));
+                    collided.sort((a,b)=>{
+                        let [x,y] = [-oldOffsetX,-oldOffsetY];
+                        return (Math.hypot(a.x-x,a.y-y)) > (Math.hypot(b.x-x,b.y-y));
+                    });
+                    collided.forEach((c) => {
+                        if (c.isColliding(-worldOffsetX, -worldOffsetY, sz)) {
                             let [x,y] = [-oldOffsetX,-oldOffsetY];
-                            return (Math.hypot(a.x-x,a.y-y)) > (Math.hypot(b.x-x,b.y-y));
-                        });
-                        collided.forEach((c) => {
-                            if (c.isColliding(-worldOffsetX, -worldOffsetY, sz)) {
-                                let [x,y] = [-oldOffsetX,-oldOffsetY];
-                                // NON STICKY / WALL SLIDE
-                                if(Math.abs(c.y-y) < Math.abs(c.x-x)){  
-                                    worldOffsetX = oldOffsetX;
-                                }else if(Math.abs(c.x-x) < Math.abs(c.y-y)){  
-                                    worldOffsetY = oldOffsetY;
-                                }else{ 
-                                    worldOffsetX = oldOffsetX;
-                                    worldOffsetY = oldOffsetY;
-                                }
-                                c.collisionAction();
+                            // NON STICKY / WALL SLIDE
+                            if(Math.abs(c.y-y) < Math.abs(c.x-x)){  
+                                worldOffsetX = oldOffsetX;
+                            }else if(Math.abs(c.x-x) < Math.abs(c.y-y)){  
+                                worldOffsetY = oldOffsetY;
+                            }else{ 
+                                worldOffsetX = oldOffsetX;
+                                worldOffsetY = oldOffsetY;
                             }
-                        });
-
-                        // charge the attack
-                        if(protagonist.isCharging){
-                           protagonist.charge(dt);
-                           let c = (Math.sin(time)+1)/2;
-                           protagonist.colorModifier = [c,c,c,1];
+                            c.collisionAction();
                         }
+                    });
 
-                    }//end if control enabled
-                    foreground.draw(dt);
-            }
+                    // charge the attack
+                    if(protagonist.isCharging){
+                         protagonist.charge(dt);
+                         let c = (Math.sin(time)+1)/2;
+                         protagonist.colorModifier = [c,c,c,1];
+                    }
+
+                }//end if control enabled
+
+                framebuffer.unbind();
+                framebuffer.draw(dt);
+
+            }//end of frame limiter
 
             // LOOP AGAIN
             requestAnimationFrame(render);
