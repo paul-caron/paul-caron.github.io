@@ -1,3 +1,5 @@
+"use strict";
+
 // Globals
 let frameBuffer;
 let frameBufferTexture;
@@ -77,6 +79,10 @@ const textureURLs = [
     assetsRoot + 'credits.png',
     assetsRoot + 'bubblered.png',
     assetsRoot + 'font.png',
+    assetsRoot + 'skull.png',
+    assetsRoot + 'skull1.png',
+    assetsRoot + 'skull2.png',
+    assetsRoot + 'crate.png',
 ];
 
 // vertices for the background x,y,z,u,v
@@ -182,21 +188,17 @@ function restart(){
 }
 
 function die() {
+    framebuffer.option = 2;
     protagonist.dead = true;
     audio.pause();
     audio = document.querySelector("#ether");
     audio.play();
     setTimeout(()=>{
         let answer = confirm('restart level?');
-        if(answer) restart();
+        if(answer){
+            framebuffer.option = 0;
+            restart();
+        }
     }, 6000);
-}
-
-function initLevel() {
-    controlsEnabled = true;
-    bullets = [];
-    worldOffsetX = 0;
-    worldOffsetY = 0;
-    return { colliders: [], enemies: [], drawables: [], movers: [], transitionProgress: 0.0 }
 }
 

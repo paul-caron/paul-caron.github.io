@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="src/stylesheet.css">
     </style>
 </head>
-
 <body>
     <div id="dialogBox"><img id="dialogAvatar"><pre id="dialogText">start</pre></div>
     <div id="buttons">
@@ -26,6 +25,7 @@
     <button id="music">🎵</button>
     <button id="zoomIn" onClick="if(zoomFactor>0)zoomFactor-=0.25;">&plus;</button>
     <button id="zoomOut" onClick="if(zoomFactor<2)zoomFactor+=0.25;">&minus;</button>
+    <button id="restart" onClick="die();">💀</button>
     <canvas id="webglCanvas"></canvas>
     <script src="src/globals.js"></script>
     <script src="src/classes.js"></script>
@@ -37,13 +37,20 @@
 async function start(){
     try {
 
-        //INIT
+        // INITIALIZATION
         await initWebGL(); //init canvas, webgl context, textures, programs, attributes and uniform locations
         initEvents(); //keyboard and touch events
         level = new Level1();
-        protagonist = new Protagonist();
         background = new Drawable([0], backgroundVertices);
         framebuffer = new Framebuffer();
+        protagonist = new Protagonist();
+
+// DEBUG / TESTING
+//        level = new Level14();
+//        protagonist.ammoType = 'fjkldjslfk';
+//        protagonist.weapon = 'double';
+//        protagonist.strength = 2;
+//        protagonist.speed = 2;
 
         // THE LOOP
         let previousTime = 0; //time of the last rendering
@@ -53,6 +60,7 @@ async function start(){
             if (!(dt < 10))
                 previousTime = time;
 
+            // FRAME LIMITING CONDITIONS
             if(!dt || dt > 32 || dt < 10 || protagonist.dead){}
             else{
 
@@ -92,14 +100,24 @@ async function start(){
                         b.positionOffset = [worldOffsetX, worldOffsetY, 0.0];
                         b.draw(dt);
                         b.move(dt);
+                        b.update(dt);
                     });
 
                     // CHECK COLLISION BETWEEN ENEMIES AND BULLETS
-                    level.enemies.forEach((e) => {
+                    level.colliders.forEach((e) => {
                         if (e.dead) return;
                         bullets.forEach((b) => {
                             if (e.isColliding(b.x, b.y, sz)) {
                                 if (e.dead) return;
+                                if(!e.isEnemy){
+                                    b.dx = 0;
+                                    b.dy = 0;
+                                    b.lifetime = 0;
+                                    b.update =()=>{}
+                                    b.x = b.previousX;
+                                    b.y = b.previousY;
+                                    return;
+                                }
                                 e.colorModifier = [Math.sin(time)+1,1,1,1];
                                 let x = (Math.max(e.x - e.halfWidth, b.x-b.halfWidth)+Math.min(e.x+e.halfWidth, b.x+b.halfWidth))/2;
                                 let y = (Math.max(e.y - e.halfWidth, b.y-b.halfWidth)+Math.min(e.y+e.halfWidth, b.y+b.halfWidth))/2;
@@ -107,7 +125,7 @@ async function start(){
                                 blood.lifetime = 500;
                                 level.drawables.push(blood);
                                 level.movers.push(blood);
-                                blood.updateDxy = (dt) => {
+                                blood.update = (dt) => {
                                     let angle = Math.atan2(blood.dy, blood.dx);
                                     blood.dx = Math.cos(angle+Math.PI/90)/800 ;
                                     blood.dy = Math.sin(angle+Math.PI/90)/800 ;
@@ -121,7 +139,29 @@ async function start(){
                     // MOVERS
                     level.movers.forEach(m => {
                         m.move(dt);
-                        m.updateDxy(dt);
+                        m.update(dt);
+                    });
+
+
+                    // COLLISION CHECK BETWEEN COLLIDERS THEN REVERSE MOVEMENT IF BLOCKED
+                    let blockings = level.colliders.filter(c=>c.isBlocking);
+                    let blockables = level.colliders.filter(c=>c.isBlockable);
+
+                    blockables.forEach((blockable)=>{
+                        blockings.forEach((blocking)=>{
+                            if(blocking === blockable) return;
+                            if(blockable.isColliding(blocking.x,blocking.y,blocking.halfWidth)){
+                                // NON STICKY / WALL SLIDE
+                                if(Math.abs(blocking.y-blockable.y) < Math.abs(blocking.x-blockable.x)){  
+                                    blockable.x = blockable.previousX;
+                                }else if(Math.abs(blocking.x-blockable.x) < Math.abs(blocking.y-blockable.y)){  
+                                    blockable.y = blockable.previousY;
+                                }else{ 
+                                    blockable.x = blockable.previousX;
+                                    blockable.y = blockable.previousY;
+                                }
+                            }
+                        });
                     });
 
                     // DOOMERS LIFETIMES CLEANING
@@ -158,6 +198,11 @@ async function start(){
                     });
                     collided.forEach((c) => {
                         if (c.isColliding(-worldOffsetX, -worldOffsetY, sz)) {
+                            c.onCollision();
+                        }else{
+                            return ;
+                        }
+                        if (c.isBlocking) {
                             let [x,y] = [-oldOffsetX,-oldOffsetY];
                             // NON STICKY / WALL SLIDE
                             if(Math.abs(c.y-y) < Math.abs(c.x-x)){  
@@ -168,7 +213,6 @@ async function start(){
                                 worldOffsetX = oldOffsetX;
                                 worldOffsetY = oldOffsetY;
                             }
-                            c.collisionAction();
                         }
                     });
 

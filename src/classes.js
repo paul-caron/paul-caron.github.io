@@ -1,3 +1,4 @@
+"use strict";
 
 // Drawable Tile Class
 class Drawable {
@@ -21,8 +22,9 @@ class Drawable {
         this.x = x;
         this.y = y;
         this.z = z;
-        this.collisionAction = () => { };
+        this.onCollision = () => { };
         this.colorModifier = [1.0,1.0,1.0,1.0];
+        this.isDrawable = true;
     }
     draw(dt) { // delta time from previous render
         gl.useProgram(program);
@@ -169,6 +171,7 @@ class Char extends Drawable{
 class Line {
     constructor(vertices) {
         this.vertices = vertices;  //x,y,z,r,g,b,a
+        this.isDrawable = true;
     }
     draw(dt) { // delta time from previous render
         gl.useProgram(program2);
@@ -188,6 +191,9 @@ class Line {
 
 // Mixin
 const Collider = {
+    isCollider: true,
+    isBlockable: true, //can it be blocked from moving if bumping into obtacles?
+    isBlocking: true, //can it be an obstacle that blocks movements of another?
     halfWidth: 0,
     x: 0,
     y: 0,
@@ -199,38 +205,43 @@ const Collider = {
         const verticalOverlap = Math.abs(y1 - y2) < (halfWidth1 + halfWidth2);
         return horizontalOverlap && verticalOverlap;
     },
-    collisionAction: function () { } // to override; callback called when collision happens
+    onCollision: function () { } // to override; callback called when collision happens
 };
 
 // Mixin
 const Doomed = {
+    isDoomed: true,
     lifetime: 2000,
     expired: false,
     expire: function (dt) {
         this.lifetime -= dt;
         if (this.lifetime < 0) {
             this.expired = true;
-            this.expiring(dt);
+            this.onExpire(dt);
         }
     },
-    expiring: function (dt){
+    onExpire: function (dt){ //onExpire
         //override this callback, is called when object's lifetime expires
     },
 }
 
 // Mixin
 const Mover = {
+    isMover: true,
     x: 0,
     y: 0,
     dx: 0,
     dy: 0,
+    previousX: 0,
+    previousY: 0,
     move: function (dt) {
         if (this.dead) return;
+        this.previousX = this.x;
+        this.previousY = this.y;
         this.x += this.dx;
         this.y += this.dy;
-        this.updateDxy();
     },
-    updateDxy: function (dt) { // to override
+    update: function (dt) { // to override
         //this.dx = ...;
         //this.dy = ...;
     },
@@ -265,10 +276,10 @@ class Puzzle {
     this.switches = [this.sw1,this.sw2,this.sw3,this.sw4];
 
     this.switches.forEach(s=>{
-        let oldCollisionAction = s.collisionAction.bind(s);
-        s.collisionAction = ()=>{
+        let oldonCollision = s.onCollision.bind(s);
+        s.onCollision = ()=>{
             if(!s.enabled) return;
-            oldCollisionAction();
+            oldonCollision();
             setTimeout(()=>{s.animation = 'idle';},1000);
             let shard = this.shards[s.swapIndices[0]];
             let shard2 = this.shards[s.swapIndices[1]];
@@ -301,6 +312,8 @@ class Bullet extends Drawable {
         Object.assign(this, Mover);
         Object.assign(this, Doomed);
         Object.assign(this, Collider);
+        this.isBlockable = false;
+        this.isBlocking = false;
         this.halfWidth = sz;
         this.x = x;
         this.y = y;
@@ -329,9 +342,13 @@ class Fixture extends Drawable {
     constructor(sz, textures, vertices, x = 0, y = 0, z = 0) {
         super(textures, vertices, x, y, z);
         Object.assign(this, Collider);
+        this.isBlocking = true;
+        this.isBlockable = false;
         this.halfWidth = sz;
         this.x = x;
         this.y = y;
+        this.previousX = x;
+        this.previousY = y;
     }
 }
 
@@ -340,13 +357,18 @@ class Enemy extends Drawable {
         super(textures, vertices, x, y, z);
         Object.assign(this, Mover);
         Object.assign(this, Collider);
+        this.isBlocking = true;
+        this.isBlockable = true;
+        this.isEnemy = true;
         Object.assign(this, Doomed);
         this.halfWidth = sz;
         this.x = x;
         this.y = y;
+        this.z = z;
         this.life = 10;
         this.lifetime = Infinity;
-        this.expiring = () => {
+        this.lastWord = 'fuck';
+        this.onExpire = () => {
             let shard1 = new Drawable(
                              this.textureIndices,
                              getVertices(this.halfWidth/2, 0,0,2));
@@ -393,7 +415,7 @@ class Enemy extends Drawable {
 
             let chars = (()=>{
                 let results = [];
-                ['f','u','c','k','!'].forEach((letter,index,arr)=>{
+                this.lastWord.split('').forEach((letter,index,arr)=>{
                     let char = new Char(letter, sz/2, this.x + (1+index-arr.length/2)*sz/2, this.y - this.halfWidth*2, this.z);
                     Object.assign(char,Doomed);
                     results.push(char);
@@ -406,6 +428,40 @@ class Enemy extends Drawable {
     }
     dying = function () { } // override
 }
+
+
+class Generator extends Enemy {
+    constructor(x,y,z,classtype = DEA, generationTime = 4000){
+        super(sz, [44,45,46], tileVertices,x,y,z);
+        this.spawningZone = {x:x,y:y+sz*2,halfWidth:sz};
+        this.life = 600;
+        this.generationTime = generationTime;
+        this.animations.idle = {
+            "timePerFrame": 500,
+            "counter": 0,
+            "textureIndices": [0, 0, 0, 0, 1, 2, 1, 2],
+            "indexPointer": 0,
+        };
+        this.classtype = classtype;
+        this.update = (dt) =>{
+            this.generationTime -= dt;
+            if(this.generationTime < 0){
+                let {x,y,halfWidth} = this.spawningZone;
+                let spawning = level.enemies.
+                    filter(e=>e.isColliding(x,y,halfWidth)).length===0;
+                if(spawning){
+                    let enemy = new classtype(x,y,0);
+                    level.drawables.push(enemy);
+                    level.movers.push(enemy);
+                    level.colliders.push(enemy);
+                    level.enemies.push(enemy);
+                    this.generationTime = generationTime;
+                }
+            }
+       };
+
+    }
+};
 
 class Particle extends Drawable {
     constructor(textures, x, y) {
@@ -447,16 +503,20 @@ class Leaf extends Drawable {
         super([24], tileVertices, x, y);
         Object.assign(this, Collider);
         Object.assign(this, Doomed);
+        this.isBlocking = false;
+        this.isBlockable = false;
         this.halfWidth = sz;
         this.x = x;
         this.y = y;
+        this.previousX = x;
+        this.previousY = y;
         this.lifetime = Infinity;
-        this.collisionAction = () => {
+        this.onCollision = () => {
             if (!collectables['leaf']) collectables['leaf'] = 1;
             else collectables['leaf'] += 1;
             dialog(`YOU FOUND A LEAF [${collectables['leaf']}]`,null,'assets/leaf.png');
             this.lifetime = 0;
-            this.collisionAction = () => { };
+            this.onCollision = () => { };
         };
     }
 };
@@ -477,7 +537,7 @@ class Switch extends Fixture {
             "indexPointer": 0,
         };
         this.enabled = true;
-        this.collisionAction = () => {
+        this.onCollision = () => {
           //toggle
           if(this.enabled){
             this.animation = this.animation==='idle'?'rotate':'idle';
@@ -498,6 +558,8 @@ class Portal extends Fixture {
             "textureIndices": [0, 1, 2, 3, 4, 5],
             "indexPointer": 0,
         };
+        this.isBlocking = false;
+        this.isBlockable = false;
     }
 }
 
@@ -507,14 +569,26 @@ class Chest extends Fixture {
     }
     open() {
         this.animations.idle.textureIndices = [1];
-        this.collisionAction = () => { };
+        this.onCollision = () => { };
     }
 }
+
+class Crate extends Enemy {
+    constructor(x, y, z) {
+        super(sz, [47], tileVertices, x, y, z);
+        this.life = 40;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.lastWord = "";
+    }
+}
+
 
 class DEA extends Enemy {
     constructor(x, y, z) {
         super(sz, [18, 19], tileVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY THE D.E.A.",null,'assets/dea.png');
         };
@@ -526,13 +600,22 @@ class DEA extends Enemy {
         };
         this.animation = 'walking';
         this.life = 15;
+        this.update = (dt)=> {
+            if (!dt) return;
+            let homingTarget = protagonist.getPosition();
+            let dy = -this.y + homingTarget.y;
+            let dx = -this.x + homingTarget.x;
+            let angle = Math.atan2(dy, dx);
+            this.dx = 0.0001 * dt * Math.cos(angle);
+            this.dy = 0.0001 * dt * Math.sin(angle);
+        };
     }
 }
 
 class DEA_Boss extends Enemy {
     constructor(x, y, z) {
         super(boss_sz, [18, 19], bossVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY THE D.E.A.",null,'assets/dea.png');
         };
@@ -550,7 +633,7 @@ class DEA_Boss extends Enemy {
 class Grump_Boss extends Enemy {
     constructor(x, y, z) {
         super(boss_sz, [30,31], bossVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY GRUMP",null,'assets/grump.png');
         };
@@ -562,31 +645,155 @@ class Grump_Boss extends Enemy {
         };
         this.animation = 'walking';
         this.life = 5000;
+        this.animationCounter = 10000;
+        this.reloadTime = 2000;
+        this.update = (dt) => {
+            if (!dt) return;
+
+            // MOVE
+            this.animationCounter -= dt;
+            if (this.animationCounter < 0) this.animationCounter = 10000;
+
+            let target = { x: 0, y: -0.4 };
+            let speed = 0.5;
+            if (this.animationCounter < 2000) {
+                target = protagonist.getPosition();
+                speed = 1.2;
+            }
+            let dy = -this.y + target.y;
+            let dx = -this.x + target.x;
+            let angle = Math.atan2(dy, dx);
+            this.dx = speed * 0.0003 * dt * Math.cos(angle);
+            this.dy = speed * 0.0003 * dt * Math.sin(angle);
+
+            // SHOOT
+            this.reloadTime -= dt;
+            if(this.reloadTime < 0){
+                this.reloadTime = 2000;
+                if(!this.dead){
+                    let bubble = new Bubble(this.x, this.y, 0);
+                    bubble.explode = () => {
+                        let max = sz*6;
+                        bubble.halfWidth += sz/150 * dt;
+                        bubble.halfWidth = (bubble.halfWidth<max)?bubble.halfWidth: max;
+                        bubble.vertices = getVertices(bubble.halfWidth);
+                        if(bubble.halfWidth === max) bubble.lifetime = 0;
+                    };
+                    bubble.lifetime = 2000;
+                    let target = protagonist.getPosition();
+                    bubble.update = (bdt) => {
+                        let dx = target.x - bubble.x;
+                        let dy = target.y - bubble.y;
+                        if(Math.abs(dx+dy)<sz){
+                            bubble.explode();
+                        }
+                        let angle = Math.atan2(dy, dx);
+                        bubble.dx = Math.cos(angle) * bdt * 0.0003;
+                        bubble.dy = Math.sin(angle) * bdt * 0.0003;
+                    };
+                    bubble.onCollision = () => {
+                        dialog("YOU WERE CAUGHT BY GRUMP. NO HAPPY ENDING",null,'assets/grump.png');
+                        die();
+                        bubble.dy = 0;
+                        bubble.dx = 0;
+                    };
+                    level.drawables.push(bubble);
+                    level.movers.push(bubble);
+                    level.colliders.push(bubble);
+                }
+            }
+        };
     }
 };
 
 class Eye_Boss extends Enemy {
     constructor(x, y, z) {
-        super(boss_sz, [34,35,36], bossVertices, x, y, z);
-        this.collisionAction = () => {
+        super(boss_sz, [36,34,35], bossVertices, x, y, z);
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY THE EVIL EYE",null,'assets/eye.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
             "counter": 0,
-            "textureIndices": [0, 1],
+            "textureIndices": [1, 2],
             "indexPointer": 0,
         };
         this.animation = 'walking';
         this.life = 5000;
+        this.isBlockable = false;
+        this.animationTime = 10000;
+        this.patrolY = 0.4;
+        this.resetReloadTime = () => {this.reloadTime = 200;};
+        this.resetReloadTime();
+
+        this.update = (dt) => {
+
+            if(!dt) return ;
+            this.animationTime -= dt;
+
+            //loop animation cycle
+            if(this.animationTime < 0){
+              this.animationTime = 10000;
+              this.patrolY *= -1;
+            }
+
+            //seek
+            if(this.animationTime <= 5000){
+              let {x,y} = protagonist.getPosition();
+              let dx = x - this.x;
+              let dy = y - this.y;
+              let angle = Math.atan2(dy,dx);
+              let dist = Math.hypot(dy,dx);
+              let force = 0.000005 * dt;
+              this.dx +=  force * Math.cos(angle);
+              this.dy +=  force * Math.sin(angle);
+            }
+
+            //patrol
+            if(this.animationTime > 5000){
+              let x = 0;
+              let y = this.patrolY;
+              let dx = x - this.x;
+              let dy = y - this.y;
+              let angle = Math.atan2(dy,dx);
+              let d = 0.0003 * dt;
+              this.dx =  d * Math.cos(angle);
+              this.dy =  d * Math.sin(angle);
+              //shoot
+              if(this.animationTime < 6000){
+                this.reloadTime -= dt;
+                if(this.reloadTime < 0) {
+                  this.resetReloadTime();
+                  let n = 6;
+                  for(let i = 0; i < n; ++i){
+                    let bubble = new Bubble(this.x, this.y, 0);
+                    bubble.lifetime = 6000;
+                    let angle = 2 * Math.PI / n * i;
+                    bubble.update = (bdt) => {
+                        bubble.dx = Math.cos(angle + Math.PI/360) * 0.0003 * bdt;
+                        bubble.dy = Math.sin(angle + Math.PI/360) * 0.0003 * bdt;
+                        angle += Math.PI/180;
+                    };
+                    bubble.onCollision = ()=>{
+                        die();
+                        dialog("YOU WERE CAUGHT BY THE EVIL EYE",null,'assets/eye.png');
+                    };
+                    level.drawables.push(bubble);
+                    level.colliders.push(bubble);
+                    level.movers.push(bubble);
+                  }
+                }
+              }
+            }
+        }; //end update
     }
 };
 
 class ICE extends Enemy {
     constructor(x, y, z) {
         super(sz, [25, 26], tileVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY I.C.E.",null,'assets/ice.png');
         };
@@ -598,13 +805,54 @@ class ICE extends Enemy {
         };
         this.animation = 'walking';
         this.life = 50;
+        this.reloadTime = 2000;
+        this.previousX = this.x;
+        this.previousY = this.y;
+        this.update = (dt) => {
+            if (!dt) return;
+            if(this.dead) return;
+
+            // MOVE
+            let target = protagonist.getPosition();
+            let dy = -this.y + target.y;
+            let dx = -this.x + target.x;
+            let angle = Math.atan2(dy, dx);
+            this.dx = 0.00004 * dt * Math.cos(angle);
+            this.dy = 0.00004 * dt * Math.sin(angle);
+
+            // SHOOT BUBBLE
+            this.reloadTime -= dt;
+            if(this.reloadTime < 0){
+                this.reloadTime = 2000;
+                if(!this.dead){
+                    let bubble = new Bubble(this.x,this.y,0);
+                    let {x,y} = target;
+                    let angle = Math.atan2(y-this.y,x-this.x);
+                    bubble.update = (bdt)=>{
+                        bubble.dx = Math.cos(angle) * bdt * 0.0003;
+                        bubble.dy = Math.sin(angle) * bdt * 0.0003;
+                    }
+                    bubble.lifetime = 2000;
+                    level.colliders.push(bubble);
+                    level.drawables.push(bubble);
+                    level.movers.push(bubble);
+                    bubble.onCollision = () => {
+                        die();
+                        dialog("YOU WERE CAUGHT BY I.C.E.",null,'assets/ice.png');
+                        bubble.dy = 0;
+                        bubble.dx = 0;
+                    };
+                }
+            };
+        };
+
     }
 };
 
 class ICE_Boss extends Enemy {
     constructor(x, y, z) {
         super(boss_sz, [25, 26], bossVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY I.C.E.",null,'assets/ice.png');
         };
@@ -616,15 +864,62 @@ class ICE_Boss extends Enemy {
         };
         this.animation = 'walking';
         this.life = 4500;
+
+        this.animationCounter = 10000;
+        this.reloadTime = 2000;
+
+        this.update = function (dt) {
+            if (!dt) return;
+            this.animationCounter -= dt;
+            if (this.animationCounter < 0) this.animationCounter = 10000;
+
+            // MOVE
+            let target = { x: 0, y: -0.4 };
+            let speed = 0.5;
+            if (this.animationCounter < 2000) {
+                target = protagonist.getPosition();
+                speed = 1.2;
+            }
+            let dy = -this.y + target.y;
+            let dx = -this.x + target.x;
+            let angle = Math.atan2(dy, dx);
+            this.dx = speed * 0.0003 * dt * Math.cos(angle);
+            this.dy = speed * 0.0003 * dt * Math.sin(angle);
+
+            // SHOOT
+            this.reloadTime -= dt;
+            if(this.reloadTime < 0){
+                this.reloadTime = 2000;
+                if(!this.dead){
+                    let {x,y} = protagonist.getPosition();
+                    let angle = Math.atan2(y-this.y,x-this.x);
+                    let bubble = new Bubble(this.x, this.y, 0);
+                    bubble.lifetime = 2000;
+                    bubble.update = (bdt)=>{
+                        bubble.dx = Math.cos(angle) * bdt * 0.0003;
+                        bubble.dy = Math.sin(angle) * bdt * 0.0003;
+                    }
+                    bubble.onCollision = () => {
+                        die();
+                        dialog("YOU WERE CAUGHT BY I.C.E.",null,'assets/ice.png');
+                        bubble.dy = 0;
+                        bubble.dx = 0;
+                    };
+                    level.colliders.push(bubble);
+                    level.drawables.push(bubble);
+                    level.movers.push(bubble);
+                }
+            };
+        };
     }
 };
 
 class DOGE extends Enemy {
     constructor(x, y, z) {
         super(sz, [28, 29], tileVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
-            dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'doge.png');
+            dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
         };
         this.animations.walking = {
             "timePerFrame": 200,
@@ -634,14 +929,87 @@ class DOGE extends Enemy {
         };
         this.animation = 'walking';
         this.life = 60;
-    }
+        this.reloadTime = 2000;
+        this.update = (dt) => {
+            this.reloadTime -= dt;
+            if(this.reloadTime < 0){
+                this.reloadTime = 2000;
+                if(!this.dead){
+                    let bubble = new Bubble(this.x, this.y, 0);
+                    bubble.initialLifetime = 2000;
+                    let {x,y} = protagonist.getPosition();
+                    let angle = Math.atan2(y-this.y,x-this.x);
+                    bubble.dx = Math.cos(angle) * dt * 0.0003;
+                    bubble.dy = Math.sin(angle) * dt * 0.0003;
+                    bubble.lifetime = bubble.initialLifetime;
+                    bubble.onCollision = () => {
+                        die();
+                        dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
+                        bubble.dy = 0;
+                        bubble.dx = 0;
+                    };
+                    bubble.onExpire=()=>{
+                      if(bubble.initialLifetime<500) return;
+                      mult(bubble);
+                    }
+                    level.colliders.push(bubble);
+                    level.drawables.push(bubble);
+                    level.movers.push(bubble);
+                    let mult=(parent)=>{
+                        let newBubble = new Bubble(parent.x, parent.y, 0, parent.halfWidth/2);
+                        newBubble.initialLifetime = parent.initialLifetime/2;
+                        newBubble.lifetime = parent.initialLifetime/2;
+                        let angle = Math.atan2(parent.dy,parent.dx);
+                        let newAngle = angle + Math.PI/2;
+                        newBubble.update = (bdt) => {
+                          newBubble.dx = Math.cos(newAngle) * bdt * 0.0003;
+                          newBubble.dy = Math.sin(newAngle) * bdt * 0.0003;
+                        };
+                        let newBubble2 = new Bubble(parent.x, parent.y, 0, parent.halfWidth/2);
+                        newBubble2.initialLifetime = parent.initialLifetime/2;
+                        newBubble2.lifetime = parent.initialLifetime/2;
+                        let newAngle2 = angle - Math.PI/2;
+                        newBubble2.update = (bdt) => {
+                          newBubble2.dx = Math.cos(newAngle2) * bdt * 0.0003;
+                          newBubble2.dy = Math.sin(newAngle2) * bdt * 0.0003;
+                        };
+                        newBubble.onExpire=()=>{
+                          if(newBubble.initialLifetime<500) return;
+                          mult(newBubble);
+                        }
+                        newBubble2.onExpire=()=>{
+                          if(newBubble2.initialLifetime<500) return;
+                          mult(newBubble2);
+                        }
+
+                        newBubble.onCollision = () => {
+                          die();
+                          dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
+                          newBubble.dy = 0;
+                          newBubble.dx = 0;
+                        };
+                        newBubble2.onCollision = () => {
+                          die();
+                          dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
+                          newBubble2.dy = 0;
+                          newBubble2.dx = 0;
+                       };
+
+                       level.colliders.push(newBubble,newBubble2);
+                       level.drawables.push(newBubble,newBubble2);
+                       level.movers.push(newBubble,newBubble2);
+                   }; //mult end
+               } //end if
+           }; //end if
+        }; //end update
+    } //end constructor
 };
 
 
 class DOGE_Boss extends Enemy {
     constructor(x, y, z) {
         super(boss_sz, [28, 29], bossVertices, x, y, z);
-        this.collisionAction = () => {
+        this.onCollision = () => {
             die();
             dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
         };
@@ -653,6 +1021,100 @@ class DOGE_Boss extends Enemy {
         };
         this.animation = 'walking';
         this.life = 5000;
+        this.animationCounter = 10000;
+        this.reloadTime = 2000;
+        this.update = (dt) => {
+            if (!dt) return;
+            this.animationCounter -= dt;
+            if (this.animationCounter < 0) this.animationCounter = 10000;
+
+            // MOVE
+            let target = { x: 0, y: -0.4 };
+            let speed = 0.5;
+            if (this.animationCounter < 2000) {
+                target = protagonist.getPosition();
+                speed = 1.2;
+            }
+            let dy = -this.y + target.y;
+            let dx = -this.x + target.x;
+            let angle = Math.atan2(dy, dx);
+            this.dx = speed * 0.0003 * dt * Math.cos(angle);
+            this.dy = speed * 0.0003 * dt * Math.sin(angle);
+
+            // SHOOT
+            this.reloadTime -= dt;
+            if(this.reloadTime < 0){
+                this.reloadTime = 2000;
+                if(!this.dead){
+                    let bubble = new Bubble(this.x, this.y, 0);
+                    bubble.initialLifetime = 2000;
+                    let {x,y} = protagonist.getPosition();
+                    let angle = Math.atan2(y-this.y,x-this.x);
+                    bubble.update = (bdt) => {
+                        bubble.dx = Math.cos(angle) * bdt * 0.0003;
+                        bubble.dy = Math.sin(angle) * bdt * 0.0003;
+                    }
+                    bubble.lifetime = bubble.initialLifetime;
+                    bubble.onCollision = () => {
+                        die();
+                        dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
+                        bubble.dy = 0;
+                        bubble.dx = 0;
+                    };
+                    bubble.onExpire=()=>{
+                      if(bubble.initialLifetime<500) return;
+                      mult(bubble);
+                    }
+                    level.colliders.push(bubble);
+                    level.drawables.push(bubble);
+                    level.movers.push(bubble);
+                    let mult=(parent)=>{
+                        let newBubble = new Bubble(parent.x, parent.y, 0, parent.halfWidth/2);
+                        newBubble.initialLifetime = parent.initialLifetime/2;
+                        newBubble.lifetime = parent.initialLifetime/2;
+                        let angle = Math.atan2(parent.dy,parent.dx);
+                        let newAngle = angle + Math.PI/2;
+                        newBubble.update = (bdt) => {
+                            newBubble.dx = Math.cos(newAngle) * bdt * 0.0003;
+                            newBubble.dy = Math.sin(newAngle) * bdt * 0.0003;
+                        };
+                        let newBubble2 = new Bubble(parent.x, parent.y, 0, parent.halfWidth/2);
+                        newBubble2.initialLifetime = parent.initialLifetime/2;
+                        newBubble2.lifetime = parent.initialLifetime/2;
+                        let newAngle2 = angle - Math.PI/2;
+                        newBubble2.update = (bdt) => {
+                            newBubble2.dx = Math.cos(newAngle2) * bdt * 0.0003;
+                            newBubble2.dy = Math.sin(newAngle2) * bdt * 0.0003;
+                        };
+                        newBubble.onExpire=()=>{
+                          if(newBubble.initialLifetime<500) return;
+                          mult(newBubble);
+                        }
+                        newBubble2.onExpire=()=>{
+                          if(newBubble2.initialLifetime<500) return;
+                          mult(newBubble2);
+                        }
+
+                        newBubble.onCollision = () => {
+                          die();
+                          dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
+                          newBubble.dy = 0;
+                          newBubble.dx = 0;
+                        };
+                        newBubble2.onCollision = () => {
+                          die();
+                          dialog("YOU WERE CAUGHT BY D.O.G.E.",null,'assets/doge.png');
+                          newBubble2.dy = 0;
+                          newBubble2.dx = 0;
+                       };
+
+                       level.colliders.push(newBubble,newBubble2);
+                       level.drawables.push(newBubble,newBubble2);
+                       level.movers.push(newBubble,newBubble2);
+                   }; //mult end
+               } //end if
+           }; //end if
+        }; //end update
     }
 };
 
@@ -691,6 +1153,8 @@ class Protagonist extends Drawable {
 
         let dx = this.dx;
         let dy = this.dy;
+        let angle = Math.atan2(dy, dx);
+        let speed = 0.0006 ;
 
         if(this.chargedTime >= 3000){
             this.attack2(); return;
@@ -698,13 +1162,15 @@ class Protagonist extends Drawable {
 
         let shoot = (offX,offY) => {
           let bullet = new Bullet(sz, [13, 14, 15, 16], tileVertices, 0.0, 0.0, 0.0);
-          bullet.dx = dx;
-          bullet.dy = dy;
+          bullet.update = (dt) => {
+              bullet.dx = Math.cos(angle) * speed * dt;
+              bullet.dy = Math.sin(angle) * speed * dt;
+          }
           bullet.x = -worldOffsetX + offX;
           bullet.y = -worldOffsetY + offY;
           bullet.lifetime = 2000;
           bullet.power = this.strength;
-          bullet.collisionAction = () => { };
+          bullet.onCollision = () => { };
           bullet.animation = "spin";
           bullets.push(bullet);
 
@@ -718,7 +1184,7 @@ class Protagonist extends Drawable {
 
           Object.assign(line, Mover);
           Object.assign(line, Doomed);
-          line.updateDxy = (dt) => {
+          line.update = (dt) => {
               line.vertices[0] = worldOffsetX + line.origin.x;
               line.vertices[1] = -worldOffsetY - line.origin.y;
               line.vertices[7] = worldOffsetX + bullet.x;
@@ -758,7 +1224,7 @@ class Protagonist extends Drawable {
         bullet.y = -worldOffsetY;
         bullet.lifetime = 2000;
         bullet.power = this.strength * 2;
-        bullet.collisionAction = () => { };
+        bullet.onCollision = () => { };
         bullets.push(bullet);
         }
         this.chargedTime = 0;
@@ -773,13 +1239,17 @@ class Protagonist extends Drawable {
     getPosition() {
         return { x: -worldOffsetX, y: -worldOffsetY };
     }
+    setPosition(x,y) {
+        worldOffsetX = -x;
+        worldOffsetY = -y;
+    }
 };
 
 class NPC extends Fixture {
     constructor(x, y, z, text) {
         super(sz, [22, 23], tileVertices, x, y, z);
         this.text = text;
-        this.collisionAction = function () {
+        this.onCollision = function () {
             dialogBlocking(this.text,null,'assets/npc.png');
         }
     }
@@ -789,7 +1259,7 @@ class Selena extends Fixture {
     constructor(x, y, z, text) {
         super(sz, [32, 33], tileVertices, x, y, z);
         this.text = text;
-        this.collisionAction = function () {
+        this.onCollision = function () {
             dialog(this.text,null,'assets/selena.png');
         }
     }
